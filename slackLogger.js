@@ -4,14 +4,7 @@ var RTM_EVENTS = require('@slack/client').RTM_EVENTS;
 var fs = require('fs');
 var path = require('path');
 
-var logFilePath = path.resolve(process.cwd(), process.env.LOG_FILEPATH || './logfile.log');
-
-/*
-var fd = require('fs').createReadStream(logFilePath);
-var lineReader = require('readline').createInterface({
-  output: fd
-});
-*/
+var logFilePath = process.env.LOG_FILEPATH || path.join(process.cwd(), 'logfile.log');
 
 var token = process.env.SLACK_API_TOKEN || '';
 var web = new WebClient(token);

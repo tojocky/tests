@@ -1,17 +1,35 @@
 var fs = require('fs');
 var path = require('path');
-var logFilePath = path.resolve(process.cwd(), process.env.LOG_FILEPATH || './logfile.log');
-var fd = require('fs').createReadStream(logFilePath);
+var MongoClient = require('mongodb').MongoClient;
+
+var logFilePath = process.env.LOG_FILEPATH || path.join(process.cwd(), 'logfile.log');
+var mongoUrl = process.env.MONGO_URL || 'mongodb://localhost:27017/test';
 var lineReader = require('readline').createInterface({
-  input: fd
+  input: fs.createReadStream(logFilePath)
 });
 
-var offset = fs.fstatSync(fs.openSync(logFilePath)).size;
+var offsetLogs = fs.fstatSync(fs.openSync(logFilePath, 'r')).size;
+var mongoConnection = null;
 
-console.log(logFilePath);
+function getDBConnection() {
+	if(mongoConnection) {
+		return mongoConnection;
+	}
+    mongoConnection = MongoClient.connect(mongoUrl);
+    return mongoConnection;
+};
 
 lineReader.on('line', function (line) {
-  console.log('Line from file:', line);
+	var message = JSON.parse(line);
+  	console.log('Line from file:', message);
+  	// insert into db
+  	getDBConnection().then(function(db) {
+  		return db.collection('slackLogs').insertOne(message);
+  	}).then(function(result) {
+  		console.log('inserted');
+  	}, function(err) {
+  		console.error('error to insert into mongo', err);
+  	})
 });
 
 lineReader.on('close', function () {
@@ -20,22 +38,20 @@ lineReader.on('close', function () {
       return;
     }
 
-    fs.openFile(logFilePath, function(err, fd){
+    fs.open(logFilePath, 'r', function(err, fd){
     	if (err) {
     		console.error('error to read file');
     		return;
     	}
 
-
-
-    	var bufferLength = fs.fstatSync(fd).size - offset;
-
+    	var bufferLength = fs.fstatSync(fd).size - offsetLogs;
     	var buffer = Buffer.allocUnsafe(bufferLength)
-    	fs.read(fd, buffer, 0, bufferLength, offset, function(err, bytesRead, buffer) {
+    	fs.read(fd, buffer, 0, bufferLength, offsetLogs, function(err, bytesRead, buffer) {
     		if(err) {
     			console.error('error to read file to buffer');
     			return;
     		}
+    		offsetLogs += bytesRead;
     		lineReader._normalWrite(buffer);
     	})
     })
